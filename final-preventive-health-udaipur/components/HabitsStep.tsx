@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import type { UserData, Action } from '../types.ts';
 import { t } from '../locales/index.ts';
 import TextInput from './form/TextInput.tsx';
+import RadioGroup from './form/RadioGroup.tsx';
 
 interface HabitsStepProps {
   data: UserData;
@@ -15,12 +16,9 @@ const HabitsStep: React.FC<HabitsStepProps> = ({ data, dispatch, onNext, onBack 
   const [animatedRisk, setAnimatedRisk] = useState<{ id: string | null; level: 'high' | 'moderate' | null }>({ id: null, level: null });
   const animationTimeoutRef = useRef<number | null>(null);
   
-  // Local state for the controlled input to improve UX
   const [quitYearInput, setQuitYearInput] = useState<string>(() => data.quitSmokingYear?.toString() || '');
   const [quitYearError, setQuitYearError] = useState<string | null>(null);
 
-  // --- Data Integrity Enhancement ---
-  // Store the last valid smoking data to prevent accidental data loss on misclick.
   const lastSmokingData = useRef({ packs: data.smokingPacksPerDay, years: data.smokingYears });
   
   useEffect(() => {
@@ -32,10 +30,6 @@ const HabitsStep: React.FC<HabitsStepProps> = ({ data, dispatch, onNext, onBack 
   const packYears = useMemo(() => {
     return (data.smokingPacksPerDay || 0) * (data.smokingYears || 0);
   }, [data.smokingPacksPerDay, data.smokingYears]);
-
-  const triggerHapticFeedback = () => {
-    if (navigator.vibrate) navigator.vibrate(50);
-  };
 
   const triggerRiskAnimation = (id: string, level: 'high' | 'moderate') => {
     if (animationTimeoutRef.current) {
@@ -55,24 +49,18 @@ const HabitsStep: React.FC<HabitsStepProps> = ({ data, dispatch, onNext, onBack 
   ];
 
   const handleQuitYearChange = (val: string) => {
-      // Update local state immediately for a responsive input field
       setQuitYearInput(val);
-      
       if (val.trim() === '') {
           setQuitYearError(null);
           dispatch({type: 'UPDATE_FIELD', field: 'quitSmokingYear', value: undefined});
           return;
       }
-      
       const year = parseInt(val, 10);
-      
-      // Validate the input and update global state only if valid
       if (val.length <= 4 && year > 1950 && year <= new Date().getFullYear()) {
           setQuitYearError(null);
           dispatch({type: 'UPDATE_FIELD', field: 'quitSmokingYear', value: year});
       } else {
           setQuitYearError(t('validation_quit_year_invalid'));
-          // Ensure global state doesn't hold a stale valid value if input becomes invalid
           if (data.quitSmokingYear !== undefined) {
             dispatch({type: 'UPDATE_FIELD', field: 'quitSmokingYear', value: undefined});
           }
@@ -80,7 +68,6 @@ const HabitsStep: React.FC<HabitsStepProps> = ({ data, dispatch, onNext, onBack 
   };
 
   const handleSmokingStatusChange = (status: 'never' | 'former' | 'current') => {
-      triggerHapticFeedback();
       const previousStatus = data.smokingStatus;
       dispatch({ type: 'UPDATE_FIELD', field: 'smokingStatus', value: status });
 
@@ -92,19 +79,49 @@ const HabitsStep: React.FC<HabitsStepProps> = ({ data, dispatch, onNext, onBack 
       }
 
       if (status === 'never') {
-          // Clear the data, but it's preserved in lastSmokingData.current
           dispatch({ type: 'UPDATE_FIELD', field: 'smokingPacksPerDay', value: 0 });
           dispatch({ type: 'UPDATE_FIELD', field: 'smokingYears', value: 0 });
           dispatch({ type: 'UPDATE_FIELD', field: 'quitSmokingYear', value: undefined });
           setQuitYearInput('');
           setQuitYearError(null);
       } else if (previousStatus === 'never' && (status === 'current' || status === 'former')) {
-          // If toggling back from 'Never', restore the remembered values instead of hardcoded defaults.
           const packsToRestore = lastSmokingData.current.packs > 0 ? lastSmokingData.current.packs : 1;
           const yearsToRestore = lastSmokingData.current.years > 0 ? lastSmokingData.current.years : 10;
           dispatch({ type: 'UPDATE_FIELD', field: 'smokingPacksPerDay', value: packsToRestore });
           dispatch({ type: 'UPDATE_FIELD', field: 'smokingYears', value: yearsToRestore });
       }
+  };
+
+  const radioOptions = {
+    cookingFuel: [
+        { value: 'lpg', label: t('cooking_fuel_lpg') },
+        { value: 'biomass', label: t('cooking_fuel_biomass') },
+        { value: 'electric', label: t('cooking_fuel_electric') },
+    ] as {value: 'lpg'|'biomass'|'electric', label: string}[],
+    oralSigns: [
+        { value: true, label: t('oral_signs_yes') },
+        { value: false, label: t('oral_signs_no') },
+    ] as {value: boolean, label: string}[],
+    smokingStatus: [
+        { value: 'never', label: t('smoking_status_never') },
+        { value: 'former', label: t('smoking_status_former') },
+        { value: 'current', label: t('smoking_status_current') },
+    ] as {value: 'never'|'former'|'current', label: string}[],
+    saltIntake: [
+        { value: 'low', label: t('salt_low') },
+        { value: 'moderate', label: t('salt_moderate') },
+        { value: 'high', label: t('salt_high') },
+    ] as {value: 'low'|'moderate'|'high', label: string}[],
+    physicalActivity: [
+        { value: 'sedentary', label: t('activity_sedentary') },
+        { value: 'moderate', label: t('activity_moderate') },
+        { value: 'active', label: t('activity_active') },
+    ] as {value: 'sedentary'|'moderate'|'active', label: string}[],
+    alcoholFrequency: [
+        { value: 'none', label: t('alcohol_frequency_none') },
+        { value: 'moderate', label: t('alcohol_frequency_moderate') },
+        { value: 'high', label: t('alcohol_frequency_high') },
+    ] as {value: 'none'|'moderate'|'high', label: string}[],
   };
 
   return (
@@ -114,51 +131,38 @@ const HabitsStep: React.FC<HabitsStepProps> = ({ data, dispatch, onNext, onBack 
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             
-            <div className="form-group">
-                <label className="form-label">{t('cooking_fuel_label')}</label>
-                <div className="radio-group">
-                    {(['lpg', 'biomass', 'electric'] as const).map((option) => (
-                        <button key={option} type="button" onClick={() => {
-                            triggerHapticFeedback();
-                            dispatch({type: 'UPDATE_FIELD', field: 'cookingFuelType', value: option});
-                            if (option === 'biomass') triggerRiskAnimation(`fuel-${option}`, 'high');
-                        }} className={`radio-label ${data.cookingFuelType === option ? 'selected' : ''} ${animatedRisk.id === `fuel-${option}` ? `risk-glow-${animatedRisk.level}` : ''}`}>
-                            {t(`cooking_fuel_${option}`)}
-                        </button>
-                    ))}
-                </div>
-            </div>
+            <RadioGroup
+                label={t('cooking_fuel_label')}
+                options={radioOptions.cookingFuel}
+                selectedValue={data.cookingFuelType}
+                onChange={(val) => {
+                    dispatch({type: 'UPDATE_FIELD', field: 'cookingFuelType', value: val});
+                    if (val === 'biomass') triggerRiskAnimation(`fuel-biomass`, 'high');
+                }}
+                getAnimationClass={(val) => animatedRisk.id === `fuel-biomass` && val === 'biomass' ? `risk-glow-high` : ''}
+            />
 
             <div className="form-group">
-                <label className="form-label">{t('oral_signs_label')}</label>
-                <p className="step-subheader" style={{marginBottom: '0.75rem', fontSize: '0.9rem'}}>{t('oral_signs_desc')}</p>
-                <div className="radio-group">
-                    <button type="button" onClick={() => {
-                        triggerHapticFeedback();
-                        dispatch({type: 'UPDATE_FIELD', field: 'hasOralSigns', value: true});
-                        triggerRiskAnimation('oral-signs-yes', 'high');
-                    }} className={`radio-label ${data.hasOralSigns ? 'selected' : ''} ${animatedRisk.id === 'oral-signs-yes' ? `risk-glow-${animatedRisk.level}` : ''}`}>
-                        {t('oral_signs_yes')}
-                    </button>
-                    <button type="button" onClick={() => {
-                        triggerHapticFeedback();
-                        dispatch({type: 'UPDATE_FIELD', field: 'hasOralSigns', value: false});
-                    }} className={`radio-label ${!data.hasOralSigns ? 'selected' : ''}`}>
-                        {t('oral_signs_no')}
-                    </button>
-                </div>
+                 <p className="step-subheader" style={{marginBottom: '0.75rem', fontSize: '0.9rem'}}>{t('oral_signs_desc')}</p>
+                 <RadioGroup
+                    label={t('oral_signs_label')}
+                    options={radioOptions.oralSigns}
+                    selectedValue={data.hasOralSigns}
+                    onChange={(val) => {
+                        dispatch({type: 'UPDATE_FIELD', field: 'hasOralSigns', value: val});
+                        if (val) triggerRiskAnimation('oral-signs-yes', 'high');
+                    }}
+                    getAnimationClass={(val) => animatedRisk.id === 'oral-signs-yes' && val ? `risk-glow-high` : ''}
+                />
             </div>
-
-            <div className="form-group">
-                <label className="form-label">{t('smoking_status_label')}</label>
-                <div className="radio-group">
-                    {(['never', 'former', 'current'] as const).map((option) => (
-                         <button key={option} type="button" onClick={() => handleSmokingStatusChange(option)} className={`radio-label ${data.smokingStatus === option ? 'selected' : ''} ${animatedRisk.id === `smoking-${option}` ? `risk-glow-${animatedRisk.level}` : ''}`}>
-                            {t(`smoking_status_${option}`)}
-                        </button>
-                    ))}
-                </div>
-            </div>
+           
+            <RadioGroup
+                label={t('smoking_status_label')}
+                options={radioOptions.smokingStatus}
+                selectedValue={data.smokingStatus}
+                onChange={handleSmokingStatusChange}
+                getAnimationClass={(val) => animatedRisk.id === `smoking-${val}` ? `risk-glow-${animatedRisk.level}` : ''}
+            />
             
             {showSmokingDetails && (
                 <div className="conditional-form-group animate-fade-in">
@@ -185,7 +189,6 @@ const HabitsStep: React.FC<HabitsStepProps> = ({ data, dispatch, onNext, onBack 
                     {smokelessProducts.map(product => (
                         <label key={product.id} className={`checkbox-label ${data.smokelessTobaccoProducts?.includes(product.id) ? 'selected' : ''} ${animatedRisk.id === `smokeless-${product.id}` ? `risk-glow-${animatedRisk.level}` : ''}`}>
                             <input type="checkbox" checked={data.smokelessTobaccoProducts?.includes(product.id)} onChange={() => {
-                                triggerHapticFeedback();
                                 const isSelected = data.smokelessTobaccoProducts.includes(product.id);
                                 const products = isSelected ? data.smokelessTobaccoProducts.filter(p => p !== product.id) : [...data.smokelessTobaccoProducts, product.id];
                                 if (!isSelected) triggerRiskAnimation(`smokeless-${product.id}`, 'high');
@@ -200,48 +203,36 @@ const HabitsStep: React.FC<HabitsStepProps> = ({ data, dispatch, onNext, onBack 
 
             <div className="risk-factor-section inset">
                 <h4 style={{ marginBottom: '1rem', color: 'var(--text-main)', fontWeight: '700' }}>{t('diet_habits_label')}</h4>
-                <div className="form-group">
-                    <label className="form-label">{t('salt_intake_label')}</label>
-                    <div className="radio-group">
-                        {(['low', 'moderate', 'high'] as const).map((level) => (
-                            <button key={level} type="button" onClick={() => {
-                                triggerHapticFeedback();
-                                dispatch({type: 'UPDATE_FIELD', field: 'saltIntake', value: level});
-                                if (level === 'high') triggerRiskAnimation(`salt-${level}`, 'moderate');
-                            }} className={`radio-label ${data.saltIntake === level ? 'selected' : ''} ${animatedRisk.id === `salt-${level}` ? `risk-glow-${animatedRisk.level}` : ''}`}>
-                                {t(`salt_${level}`)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div className="form-group">
-                    <label className="form-label">{t('physical_activity_label')}</label>
-                    <div className="radio-group">
-                        {(['sedentary', 'moderate', 'active'] as const).map((level) => (
-                            <button key={level} type="button" onClick={() => {
-                                triggerHapticFeedback();
-                                dispatch({type: 'UPDATE_FIELD', field: 'physicalActivity', value: level});
-                                if (level === 'sedentary') triggerRiskAnimation(`activity-${level}`, 'moderate');
-                            }} className={`radio-label ${data.physicalActivity === level ? 'selected' : ''} ${animatedRisk.id === `activity-${level}` ? `risk-glow-${animatedRisk.level}` : ''}`}>
-                                {t(`activity_${level}`)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div className="form-group">
-                    <label className="form-label">{t('alcohol_frequency_label')}</label>
-                    <div className="radio-group">
-                        {(['none', 'moderate', 'high'] as const).map((level) => (
-                            <button key={level} type="button" onClick={() => {
-                                triggerHapticFeedback();
-                                dispatch({type: 'UPDATE_FIELD', field: 'alcoholFrequency', value: level});
-                                if (level === 'high') triggerRiskAnimation(`alcohol-${level}`, 'moderate');
-                            }} className={`radio-label ${data.alcoholFrequency === level ? 'selected' : ''} ${animatedRisk.id === `alcohol-${level}` ? `risk-glow-${animatedRisk.level}` : ''}`}>
-                                {t(`alcohol_frequency_${level}`)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                <RadioGroup
+                    label={t('salt_intake_label')}
+                    options={radioOptions.saltIntake}
+                    selectedValue={data.saltIntake}
+                    onChange={(val) => {
+                        dispatch({type: 'UPDATE_FIELD', field: 'saltIntake', value: val});
+                        if (val === 'high') triggerRiskAnimation(`salt-high`, 'moderate');
+                    }}
+                    getAnimationClass={(val) => animatedRisk.id === `salt-high` && val === 'high' ? `risk-glow-moderate` : ''}
+                />
+                <RadioGroup
+                    label={t('physical_activity_label')}
+                    options={radioOptions.physicalActivity}
+                    selectedValue={data.physicalActivity}
+                    onChange={(val) => {
+                        dispatch({type: 'UPDATE_FIELD', field: 'physicalActivity', value: val});
+                        if (val === 'sedentary') triggerRiskAnimation(`activity-sedentary`, 'moderate');
+                    }}
+                    getAnimationClass={(val) => animatedRisk.id === `activity-sedentary` && val === 'sedentary' ? `risk-glow-moderate` : ''}
+                />
+                 <RadioGroup
+                    label={t('alcohol_frequency_label')}
+                    options={radioOptions.alcoholFrequency}
+                    selectedValue={data.alcoholFrequency}
+                    onChange={(val) => {
+                        dispatch({type: 'UPDATE_FIELD', field: 'alcoholFrequency', value: val});
+                        if (val === 'high') triggerRiskAnimation(`alcohol-high`, 'moderate');
+                    }}
+                    getAnimationClass={(val) => animatedRisk.id === `alcohol-high` && val === 'high' ? `risk-glow-moderate` : ''}
+                />
             </div>
         </div>
 

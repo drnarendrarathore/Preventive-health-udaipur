@@ -1,9 +1,12 @@
-
 import type { Recommendation } from '../types.ts';
 import { t } from './index.ts';
 
 type BaseRec = { category: string; test: string; frequency: string; };
-type Details = { title: string; content: string; }[];
+type DetailItem = 
+  | { title: string; content: string; }
+  | { interactiveComponent: 'AnimatedHeart' | 'AnimatedBloodSugar'; };
+type Details = DetailItem[];
+
 type LocalizedDetails = Record<string, Details>;
 
 const baseRecommendations: Record<string, BaseRec> = {
@@ -23,7 +26,10 @@ const baseRecommendations: Record<string, BaseRec> = {
     lifestyle: { category: 'rec_cat_wellbeing', test: 'rec_test_lifestyle', frequency: 'rec_freq_lifestyle' },
     diabetic_retinopathy: { category: 'rec_cat_metabolic', test: 'rec_test_diabetic_retinopathy', frequency: 'rec_freq_diabetic_retinopathy' },
     diabetic_foot: { category: 'rec_cat_metabolic', test: 'rec_test_diabetic_foot', frequency: 'rec_freq_diabetic_foot' },
-    diabetic_kidney: { category: 'rec_cat_metabolic', test: 'rec_test_diabetic_kidney', frequency: 'rec_freq_diabetic_kidney' }
+    diabetic_kidney: { category: 'rec_cat_metabolic', test: 'rec_test_diabetic_kidney', frequency: 'rec_freq_diabetic_kidney' },
+    pulmonologist_consult: { category: 'rec_cat_respiratory', test: 'rec_test_pulmonologist_consult', frequency: 'rec_freq_pulmonologist_consult' },
+    comprehensive_lung_assessment: { category: 'rec_cat_respiratory', test: 'rec_test_comprehensive_lung_assessment', frequency: 'rec_freq_comprehensive_lung_assessment' },
+    metabolic_syndrome_protocol: { category: 'rec_cat_metabolic', test: 'rec_test_metabolic_syndrome_protocol', frequency: 'rec_freq_metabolic_syndrome_protocol' },
 };
 
 const enData = {
@@ -50,15 +56,20 @@ const enData = {
         'lifestyle_reason': "General advice for improving diet, activity, and habits to reduce long-term health risks.",
         'reason_diabetic_retinopathy': "Essential for detecting diabetic retinopathy, a leading cause of vision loss in diabetics.",
         'reason_diabetic_foot': "Crucial for early detection of ulcers and nerve damage, preventing serious complications.",
-        'reason_diabetic_kidney': "Necessary to monitor for diabetic nephropathy, a major cause of kidney failure."
+        'reason_diabetic_kidney': "Necessary to monitor for diabetic nephropathy, a major cause of kidney failure.",
+        'pulmonologist_consult_reason': "Recommended because a combination of factors (like past smoking, occupational exposure, or domestic smoke) increases your overall lung health risk, even if you don't qualify for a CT scan.",
+        'comprehensive_lung_assessment_reason': "Due to your combined occupational exposure and use of biomass fuel, a consultation with a lung specialist (Pulmonologist) is advised to determine the best course of action, which may include tests like a chest X-ray and spirometry.",
+        'metabolic_syndrome_protocol_reason': "Your results indicate multiple risk factors for metabolic syndrome (high blood pressure, high blood sugar risk, and high waist circumference). A holistic approach to managing diet, exercise, and weight is crucial."
     },
     details: {
         bp: [
+            { interactiveComponent: 'AnimatedHeart' },
             { title: "Why it's important", content: "Uncontrolled high blood pressure can lead to severe complications like heart attacks, strokes, kidney failure, and vision problems. It's often called a 'silent killer' because it has no symptoms." },
             { title: "Who is this for?", content: "Everyone over 30 should be screened. Those with a high CBAC score, family history, or lifestyle risk factors need more frequent monitoring." },
             { title: "What to expect", content: "A simple, painless test using an inflatable cuff around your arm. Results are immediate. A reading below 120/80 mmHg is considered normal." }
         ],
         sugar: [
+            { interactiveComponent: 'AnimatedBloodSugar' },
             { title: "Why it's important", content: "Early detection of pre-diabetes and diabetes allows for lifestyle changes or treatment that can prevent or delay serious health problems, such as heart disease, vision loss, and kidney disease." },
             { title: "Who is this for?", content: "Screening is crucial for all adults over 30 in India, especially those who are overweight (BMI > 23), have a family history, or have high blood pressure." },
             { title: "What to expect", content: "Tests include a fasting blood sugar test or an HbA1c test, which provides an average blood sugar level over the past 2-3 months. Both require a simple blood draw." }
@@ -97,6 +108,21 @@ const enData = {
             { title: "Why it's important", content: "High blood sugar can damage the kidneys' filtering units over time, a condition called diabetic nephropathy. It is a leading cause of kidney failure. Early stages have no symptoms, so annual testing is crucial to detect damage and slow its progression." },
             { title: "Who is this for?", content: "This is a mandatory annual check-up for all individuals with a diagnosis of Type 2 Diabetes." },
             { title: "What to expect", content: "This involves two simple tests: a urine test (Urine Albumin-to-Creatinine Ratio or UACR) to check for a protein called albumin in the urine, and a blood test (eGFR) to see how well your kidneys are filtering waste." }
+        ],
+        pulmonologist_consult: [
+            { title: "Why it's important", content: "While you may not meet the strict criteria for a lung cancer screening CT scan, having multiple risk factors warrants a specialist's evaluation. A pulmonologist can assess your overall lung health, discuss any symptoms, and determine if further testing like spirometry is needed." },
+            { title: "Who is this for?", content: "Individuals with a combination of lung-related risk factors, such as a history of smoking, significant occupational dust exposure, or long-term use of biomass fuels in the home." },
+            { title: "What to expect", content: "The consultation will involve a detailed discussion of your history and any respiratory symptoms. The doctor will listen to your breathing and may recommend a pulmonary function test (spirometry), which involves breathing into a small machine to measure lung capacity." }
+        ],
+        comprehensive_lung_assessment: [
+            { title: "Why it's important", content: "You have multiple risk factors that affect your lung health. Instead of addressing them separately, a specialist can create a single, comprehensive plan. This ensures a more efficient and effective approach to monitoring and prevention, catching potential issues like COPD or other lung diseases early." },
+            { title: "Who is this for?", content: "Individuals with a combination of lung-related risk factors, such as occupational dust exposure (mining, stone work) and long-term use of biomass fuels, who may not fit into standard screening categories." },
+            { title: "What to expect", content: "A pulmonologist will review all your risk factors, discuss any symptoms, and perform a physical exam. They will then recommend the most appropriate next steps, which could include a breathing test (spirometry), a chest X-ray, or other monitoring." }
+        ],
+        metabolic_syndrome_protocol: [
+            { title: "What is Metabolic Syndrome?", content: "Metabolic syndrome is not a single disease, but a cluster of conditions that occur together, increasing your risk of heart disease, stroke, and type 2 diabetes. These conditions include high blood pressure, high blood sugar, excess body fat around the waist, and abnormal cholesterol levels." },
+            { title: "Why this is important for you", content: "Your assessment shows you have several key risk factors. By addressing them together through a coordinated plan with your doctor, you can significantly lower your long-term risk of major health events. Management focuses heavily on lifestyle changes." },
+            { title: "What to expect", content: "Your doctor will likely confirm the diagnosis with a lipid profile (cholesterol test). The cornerstone of treatment is a commitment to a healthy lifestyle: heart-healthy eating (like the DASH diet), regular physical activity, and achieving a healthy weight. Medication may also be prescribed." }
         ]
     } as LocalizedDetails,
     disclaimer: "Privacy First: No data is stored. Consult a nearby doctor for clinical advice. Developed by Dr. Narendra Rathore (MD, MBBS)."

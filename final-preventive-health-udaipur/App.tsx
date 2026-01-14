@@ -1,4 +1,3 @@
-
 import React, { useState, useReducer, useEffect } from 'react';
 import type { UserData, AnalysisResponse, Action } from './types.ts';
 
@@ -15,10 +14,10 @@ import { t } from './locales/index.ts';
 
 const initialUserData: UserData = {
     name: '',
-    age: 30,
+    age: undefined,
     gender: '',
     womenHealthStatus: 'default',
-    waistCircumference: 80,
+    waistCircumference: 32,
     cookingFuelType: 'lpg',
     hasOralSigns: false,
     smokingStatus: 'never',
@@ -32,7 +31,6 @@ const initialUserData: UserData = {
     hpvVaccineStatus: 'none',
     hepatitisHistory: 'none',
     marbleMiningExposure: false,
-    ashkenaziAncestry: false,
     familyHistory: [],
     familyHistoryUnsure: false,
     personalConditions: [],
@@ -119,10 +117,20 @@ function App() {
     const [error, setError] = useState<string | null>(null);
     const [direction, setDirection] = useState<'forward' | 'backward' | 'fade'>('fade');
     
+    // BUG FIX: Ensure each new step view starts at the top of the page.
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [step]);
+
     useEffect(() => {
         // Persist the current step and user data to localStorage
-        localStorage.setItem('health-app-step', String(step));
-        localStorage.setItem('health-app-data', JSON.stringify(userData));
+        // Stability Fix: Wrapped in try-catch to prevent quota exceeded errors crashing the app
+        try {
+            localStorage.setItem('health-app-step', String(step));
+            localStorage.setItem('health-app-data', JSON.stringify(userData));
+        } catch (e) {
+            console.warn("Storage quota exceeded or disabled. Session persistence may be lost.");
+        }
     }, [step, userData]);
 
     // If the app loads directly on the results step (e.g., after a refresh),
@@ -153,7 +161,10 @@ function App() {
         setError(null);
         setStep(5);
         // Explicitly set step to 5 in storage to allow reloading on the results page.
-        localStorage.setItem('health-app-step', '5'); 
+        try {
+            localStorage.setItem('health-app-step', '5'); 
+        } catch(e) { /* Ignore storage errors */ }
+
         setTimeout(() => {
             try {
                 const response = generateRecommendations(userData);
@@ -173,8 +184,10 @@ function App() {
         setResults(null);
         setError(null);
         setIsLoading(false);
-        localStorage.removeItem('health-app-data');
-        localStorage.removeItem('health-app-step');
+        try {
+            localStorage.removeItem('health-app-data');
+            localStorage.removeItem('health-app-step');
+        } catch(e) { /* Ignore storage errors */ }
     };
 
     const renderStep = () => {

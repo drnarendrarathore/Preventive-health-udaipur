@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import type { UserData, Action } from '../../types.ts';
 import { t } from '../../locales/index.ts';
@@ -9,8 +8,31 @@ interface BMICalculatorProps {
   dispatch: React.Dispatch<Action>;
 }
 
+const cmToFeetAndInches = (cm: number) => {
+    if (!cm) return { feet: 5, inches: 5 };
+    const totalInches = cm / 2.54;
+    const feet = Math.floor(totalInches / 12);
+    const inches = Math.round(totalInches % 12);
+    if (inches === 12) return { feet: feet + 1, inches: 0 };
+    return { feet, inches };
+};
+
+const feetAndInchesToCm = (feet: number, inches: number) => {
+    return (feet * 30.48) + (inches * 2.54);
+};
+
+
 const InteractiveBMICalculator: React.FC<BMICalculatorProps> = ({ data, dispatch }) => {
     const { height = 0, weight = 0, waistCircumference = 0 } = data;
+
+    const { feet, inches } = useMemo(() => cmToFeetAndInches(height), [height]);
+
+    const handleHeightChange = (newFeet?: number, newInches?: number) => {
+        const currentFeet = newFeet ?? feet;
+        const currentInches = newInches ?? inches;
+        const totalCm = feetAndInchesToCm(currentFeet, currentInches);
+        dispatch({ type: 'UPDATE_FIELD', field: 'height', value: totalCm });
+    };
 
     const bmi = useMemo(() => {
         if (!height || !weight) return 0;
@@ -35,18 +57,24 @@ const InteractiveBMICalculator: React.FC<BMICalculatorProps> = ({ data, dispatch
                     <div className="bmi-status">{status}</div>
                 </div>
                 <div className="bmi-sliders-wrapper">
-                    <div className="form-group slider-group vertical">
-                        <label htmlFor="height" className="form-label">{t('height_label')} ({height ? `${height} cm` : '--'})</label>
-                        <input type="range" id="height" min="120" max="220" value={height || 120} onChange={e => dispatch({type: 'UPDATE_FIELD', field: 'height', value: Number(e.target.value)})} className="form-slider slider-vertical" aria-label="Height Slider"/>
-                    </div>
+                     <div className="slider-group-horizontal">
+                         <div className="form-group slider-group">
+                             <label htmlFor="height_feet" className="form-label">{t('height_label')} ({feet}' {inches}")</label>
+                             <input type="range" id="height_feet" min="4" max="7" value={feet} onChange={e => handleHeightChange(Number(e.target.value), undefined)} className="form-slider" aria-label="Height in Feet"/>
+                         </div>
+                          <div className="form-group slider-group">
+                             <label htmlFor="height_inches" className="form-label" style={{ opacity: 0 }}>Inches</label>
+                             <input type="range" id="height_inches" min="0" max="11" value={inches} onChange={e => handleHeightChange(undefined, Number(e.target.value))} className="form-slider" aria-label="Height in Inches"/>
+                         </div>
+                     </div>
                     <div className="slider-group-horizontal">
                          <div className="form-group slider-group">
                             <label htmlFor="weight" className="form-label">{t('weight_label')} ({weight ? `${weight} kg` : '--'})</label>
                             <input type="range" id="weight" min="30" max="150" value={weight || 30} onChange={e => dispatch({type: 'UPDATE_FIELD', field: 'weight', value: Number(e.target.value)})} className="form-slider" aria-label="Weight Slider"/>
                         </div>
                         <div className="form-group slider-group">
-                            <label htmlFor="waist" className="form-label">{t('waist_label')} ({waistCircumference ? `${waistCircumference} cm` : '--'})</label>
-                            <input type="range" id="waist" min="40" max="160" value={waistCircumference || 40} onChange={e => dispatch({type: 'UPDATE_FIELD', field: 'waistCircumference', value: Number(e.target.value)})} className="form-slider" aria-label="Waist Circumference Slider"/>
+                            <label htmlFor="waist" className="form-label">{t('waist_label')} ({waistCircumference ? `${waistCircumference} inch` : '--'})</label>
+                            <input type="range" id="waist" min="20" max="60" value={waistCircumference || 20} onChange={e => dispatch({type: 'UPDATE_FIELD', field: 'waistCircumference', value: Number(e.target.value)})} className="form-slider" aria-label="Waist Circumference Slider"/>
                         </div>
                     </div>
                 </div>

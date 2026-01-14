@@ -1,4 +1,5 @@
 
+
 export const STEPS = [
     { id: 1, nameKey: 'step_welcome' },
     { id: 2, nameKey: 'step_basics' },
@@ -107,4 +108,12 @@ export const CLINICAL_THRESHOLDS = {
     MAXIMUM_PATIENT_AGE: 120,
 
     EARLY_ONSET_CANCER_AGE: 50,
+    ABSOLUTE_MIN_HIGH_RISK_SCREENING_AGE: 25,
+
+    // Thresholds for the Lifestyle & Genetic Risk Alert
+    LIFESTYLE_ALERT_MAX_AGE: 40,
+    LIFESTYLE_ALERT_MIN_PACK_YEARS: 15,
+
+    // Thresholds for the Holistic Lung Health Pathway
+    PULMONOLOGIST_CONSULT_MIN_PACK_YEARS: 10,
 };

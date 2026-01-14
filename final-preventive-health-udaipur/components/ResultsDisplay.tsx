@@ -1,14 +1,19 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import confetti from 'canvas-confetti';
+
 import type { AnalysisResponse, UserData, Recommendation } from '../types.ts';
 import RecommendationCard from './RecommendationCard.tsx';
-import NCDRiskGauge from './NCDRiskGauge.tsx';
+import KeyInsightsCard from './KeyInsightsCard.tsx';
+import ArogyaClinicCard from './ArogyaClinicCard.tsx';
 import RadarChart from './RadarChart.tsx';
 import Modal from './Modal.tsx';
 import { t } from '../locales/index.ts';
 import { getRecommendationDetails } from '../locales/recommendations.ts';
 import { calculateRadarData } from '../services/chartUtils.ts';
-import { jsPDF } from 'jspdf';
-import confetti from 'canvas-confetti';
+import { getBiometricAnalysis } from '../services/analysisUtils.ts';
+import { lowRiskTheme, moderateRiskTheme, highRiskTheme } from '../themes.ts';
+import { generateShareableCardDataUrl } from '../services/shareService.ts';
+import { generateHealthReportPDF } from '../services/pdfGenerator.ts';
 
 interface ResultsDisplayProps {
   results: AnalysisResponse;
@@ -22,27 +27,58 @@ const WhatsAppIcon: React.FC = () => (
     </svg>
 );
 
+const AlertIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '24px', height: '24px', flexShrink: 0, marginRight: '1rem' }}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+    </svg>
+);
+
+const LifestyleRiskAlert: React.FC = () => (
+    <div className="lifestyle-risk-alert">
+        <AlertIcon />
+        <div>
+            <strong>{t('risk_alert_title')}</strong>
+            <p>{t('risk_alert_message')}</p>
+        </div>
+    </div>
+);
+
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, onReset, userData }) => {
   const [modalRec, setModalRec] = useState<Recommendation | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+
+  const { theme, themeClass } = useMemo(() => {
+    const score = results.cbacScore;
+    if (score <= 3) return { theme: lowRiskTheme, themeClass: 'theme-low-risk' };
+    if (score >= 4 && score <= 6) return { theme: moderateRiskTheme, themeClass: 'theme-moderate-risk' };
+    return { theme: highRiskTheme, themeClass: 'theme-high-risk' };
+  }, [results.cbacScore]);
+
+  const biometricAnalysis = useMemo(() => getBiometricAnalysis(userData), [userData]);
 
   useEffect(() => {
+    let interval: number;
     if (results && results.cbacScore <= 2) {
       const duration = 2 * 1000;
       const animationEnd = Date.now() + duration;
       const defaults = { startVelocity: 25, spread: 360, ticks: 50, zIndex: 0, particleCount: 50 };
-      const themeColors = ['#007aff', '#34c759', '#5856d6', '#ffffff'];
 
-      const interval = window.setInterval(() => {
+      interval = window.setInterval(() => {
         const timeLeft = animationEnd - Date.now();
         if (timeLeft <= 0) {
             return clearInterval(interval);
         }
         
-        confetti({ ...defaults, origin: { x: Math.random() }, colors: themeColors });
+        confetti({ ...defaults, origin: { x: Math.random() }, colors: [theme.primary, theme.accent, '#ffffff'] });
       }, 200);
     }
-  }, [results]);
+
+    // Cleanup interval on unmount to prevent memory leaks
+    return () => {
+        if (interval) clearInterval(interval);
+    };
+  }, [results, theme]);
 
   const highPriorityRecs = useMemo(() => {
     return results.recommendations.filter(r => r.priority === 'high');
@@ -54,249 +90,84 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, onReset, userD
   
   const radarData = useMemo(() => calculateRadarData(userData, t), [userData]);
 
-  const generatePDF = (outputType: 'blob' | 'save' = 'save') => {
-    const doc = new jsPDF();
-    const FONT = 'Helvetica'; // Default font
-    const PRIMARY_COLOR = '#007aff';
-    const TEXT_COLOR = '#1d1d1f';
-    const MUTED_COLOR = '#86868b';
-    const BORDER_COLOR = '#d2d2d7';
-    const PAGE_WIDTH = doc.internal.pageSize.getWidth();
-    const MARGIN = 15;
-    let y = 0;
-    
-    // --- HELPER FUNCTIONS ---
-    const sanitizeFilename = (name: string) => {
-        return name.replace(/[\/\\?%*:|"<>]/g, '_');
-    };
-    
-    const drawStyledText = (text: string | string[], x: number, y: number, options: {
-        size: number;
-        color: string;
-        style?: 'normal' | 'bold';
-        align?: 'left' | 'center' | 'right';
-        maxWidth?: number;
-    }) => {
-        const { size, color, style = 'normal', align, maxWidth } = options;
-        doc.setFontSize(size).setTextColor(color).setFont(FONT, style);
-        doc.text(text, x, y, { align, maxWidth });
-    };
+  const getBmiStatusKey = (bmiValue: number) => {
+    if (bmiValue < 18.5) return 'bmi_underweight';
+    if (bmiValue < 23) return 'bmi_normal';
+    if (bmiValue < 25) return 'bmi_overweight';
+    return 'bmi_obese';
+  };
+  const bmiStatusKey = getBmiStatusKey(parseFloat(biometricAnalysis.bmi.value));
 
-    const drawHeader = () => {
-        drawStyledText(t('app_title'), MARGIN, 15, { size: 16, color: TEXT_COLOR, style: 'bold' });
-        drawStyledText(new Date().toLocaleDateString(), PAGE_WIDTH - MARGIN, 15, { size: 9, color: MUTED_COLOR, align: 'right' });
-        y = 30;
-    };
-    
-    const drawFooter = () => {
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const footerLines = doc.splitTextToSize(t('welcome_disclaimer'), PAGE_WIDTH - (MARGIN * 2));
-        drawStyledText(footerLines, MARGIN, pageHeight - 12, { size: 8, color: MUTED_COLOR });
-    };
-
-    const drawStaticGauge = (score: number) => {
-        const centerX = 145, centerY = 70, radius = 25;
-        let color = '#34c759'; // Success
-        if (score >= 4 && score < 7) color = '#ff9500'; // Warning
-        if (score >= 7) color = '#ff3b30'; // Danger
-        const riskLabel = score >= 4 ? t('cbac_high') : t('cbac_low');
-
-        const drawArcWithLines = (cx: number, cy: number, r: number, startDeg: number, endDeg: number) => {
-            const segments = 50;
-            const startRad = startDeg * Math.PI / 180;
-            const endRad = endDeg * Math.PI / 180;
-            const angleStep = (endRad - startRad) / segments;
-
-            doc.moveTo( cx + r * Math.cos(startRad), cy + r * Math.sin(startRad) );
-            for (let i = 1; i <= segments; i++) {
-                const angle = startRad + i * angleStep;
-                doc.lineTo( cx + r * Math.cos(angle), cy + r * Math.sin(angle) );
-            }
-            doc.stroke();
-        };
-
-        doc.setLineWidth(5);
-        doc.setDrawColor(BORDER_COLOR);
-        drawArcWithLines(centerX, centerY, radius, 180, 360);
-
-        const scoreAngle = 180 + (score / 10 * 180);
-        doc.setLineWidth(5);
-        doc.setDrawColor(color);
-        drawArcWithLines(centerX, centerY, radius, 180, scoreAngle);
-        
-        drawStyledText(String(score), centerX, centerY + 4, { size: 22, color: TEXT_COLOR, style: 'bold', align: 'center'});
-        drawStyledText('/ 10', centerX + 12, centerY + 4, { size: 8, color: MUTED_COLOR });
-        drawStyledText(riskLabel.toUpperCase(), centerX, centerY + 12, { size: 9, color: color, style: 'bold', align: 'center' });
-    };
-
-    const drawStaticRadar = (cx: number, cy: number, radius: number) => {
-        const chartData = calculateRadarData(userData, t);
-        const sides = chartData.length;
-        const angle = (Math.PI * 2) / sides;
-        const maxVal = 5;
-        doc.setLineWidth(0.2).setDrawColor(BORDER_COLOR);
-        for (let i = 1; i <= maxVal; i++) {
-            const r = radius * (i / maxVal);
-            const points: [number, number][] = Array.from({ length: sides }, (_, j) => [ cx + r * Math.sin(j * angle), cy - r * Math.cos(j * angle) ]);
-            
-            if (points.length > 0) {
-                doc.moveTo(points[0][0], points[0][1]);
-                for (let k = 1; k < points.length; k++) {
-                    doc.lineTo(points[k][0], points[k][1]);
-                }
-                doc.lineTo(points[0][0], points[0][1]);
-                doc.stroke();
-            }
+  const handleGeneratePDF = async () => {
+    setIsSharing(true);
+    try {
+        const pdfBlob = await generateHealthReportPDF(userData, results, theme);
+        if (pdfBlob) {
+            const url = URL.createObjectURL(pdfBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            const sanitizeFilename = (name: string) => name.replace(/[\/\\?%*:|"<>]/g, '_');
+            link.download = `${sanitizeFilename(userData.name)}_Health_Report.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         }
-        for(let i = 0; i < sides; i++) {
-            doc.line(cx, cy, cx + radius * Math.sin(i * angle), cy - radius * Math.cos(i * angle));
-            const labelPointX = cx + (radius + 5) * Math.sin(i * angle);
-            const labelPointY = cy - (radius + 5) * Math.cos(i * angle);
-            drawStyledText(chartData[i].label, labelPointX, labelPointY, { size: 8, color: MUTED_COLOR, align: 'center' });
-        }
-        const dataPoints: [number, number][] = chartData.map((d, i) => {
-            const r = radius * (d.value / maxVal);
-            return [ cx + r * Math.sin(i * angle), cy - r * Math.cos(i * angle) ];
-        });
-        doc.setFillColor(PRIMARY_COLOR).setDrawColor(PRIMARY_COLOR).setLineWidth(0.5);
-
-        if (dataPoints.length > 0) {
-            doc.moveTo(dataPoints[0][0], dataPoints[0][1]);
-            for (let i = 1; i < dataPoints.length; i++) {
-                doc.lineTo(dataPoints[i][0], dataPoints[i][1]);
-            }
-            doc.lineTo(dataPoints[0][0], dataPoints[0][1]);
-            doc.fill();
-            doc.stroke();
-        }
-    };
-    
-    const checkPageBreak = (neededHeight: number) => {
-        if (y + neededHeight > doc.internal.pageSize.getHeight() - 30) {
-            drawFooter();
-            doc.addPage();
-            drawHeader();
-        }
-    };
-    
-    const drawKeyIndicators = () => {
-        checkPageBreak(50);
-        drawStyledText(t('pdf_key_indicators'), MARGIN, y, { size: 11, color: TEXT_COLOR, style: 'bold' });
-        y += 5; doc.setDrawColor(BORDER_COLOR).line(MARGIN, y, PAGE_WIDTH - MARGIN, y); y += 8;
-
-        const bmi = (userData.weight && userData.height) ? (userData.weight / ((userData.height / 100) ** 2)) : 0;
-        let bmiStatusKey = 'bmi_obese';
-        if (bmi < 18.5) bmiStatusKey = 'bmi_underweight';
-        else if (bmi < 23) bmiStatusKey = 'bmi_normal';
-        else if (bmi < 25) bmiStatusKey = 'bmi_overweight';
-        
-        const packYears = ((userData.smokingPacksPerDay || 0) * (userData.smokingYears || 0));
-        let smokingStatusInfo = t(`smoking_status_${userData.smokingStatus}`);
-        if (userData.smokingStatus !== 'never' && packYears > 0) {
-            smokingStatusInfo += ` (${packYears} ${t('pack_years')})`;
-        }
-        
-        const indicators = [
-          { label: t('pdf_bmi_status'), value: `${bmi.toFixed(1)} (${t(bmiStatusKey)})` },
-          { label: t('waist_label'), value: `${userData.waistCircumference} cm` },
-          { label: t('pdf_tobacco_smoking'), value: smokingStatusInfo },
-          { label: t('pdf_oral_tobacco'), value: userData.usesSmokelessTobacco ? t('yes') : t('no') },
-          { label: t('alcohol_frequency_label'), value: t(`alcohol_frequency_${userData.alcoholFrequency}`) },
-          { label: t('pdf_cooking_fuel'), value: t(`cooking_fuel_${userData.cookingFuelType}`) },
-          { label: t('pdf_salt_intake_label'), value: t(`salt_${userData.saltIntake}`) },
-          { label: t('pdf_physical_activity'), value: t(`activity_${userData.physicalActivity}`) },
-        ];
-
-        indicators.forEach(indicator => {
-            drawStyledText(`${indicator.label}:`, MARGIN + 5, y, { size: 9, color: TEXT_COLOR, style: 'bold' });
-            drawStyledText(indicator.value, MARGIN + 70, y, { size: 9, color: TEXT_COLOR });
-            y += 7;
-        });
-        y += 5;
-    };
-
-    drawHeader();
-    drawStyledText(t('pdf_patient_summary'), MARGIN, y, { size: 11, color: TEXT_COLOR, style: 'bold' });
-    y += 5; doc.setDrawColor(BORDER_COLOR).line(MARGIN, y, PAGE_WIDTH - MARGIN, y); y += 10;
-    
-    const bmiVal = (userData.weight && userData.height) ? (userData.weight / ((userData.height / 100) ** 2)).toFixed(1) : 'N/A';
-    
-    drawStyledText(`${t('name_label')}:`, MARGIN, y, { size: 10, color: TEXT_COLOR, style: 'bold' });
-    drawStyledText(userData.name, MARGIN + 35, y, { size: 10, color: TEXT_COLOR, maxWidth: 80 });
-    drawStyledText(`${t('age_label')}:`, MARGIN, y + 7, { size: 10, color: TEXT_COLOR, style: 'bold' });
-    drawStyledText(`${userData.age} ${t('years')}`, MARGIN + 35, y + 7, { size: 10, color: TEXT_COLOR });
-    drawStyledText(`${t('gender_label')}:`, MARGIN, y + 14, { size: 10, color: TEXT_COLOR, style: 'bold' });
-    drawStyledText(t(`gender_${userData.gender}`), MARGIN + 35, y + 14, { size: 10, color: TEXT_COLOR });
-    drawStyledText('BMI:', MARGIN, y + 21, { size: 10, color: TEXT_COLOR, style: 'bold' });
-    drawStyledText(String(bmiVal), MARGIN + 35, y + 21, { size: 10, color: TEXT_COLOR });
-    drawStyledText(t('ncd_score'), 108, y-5, { size: 11, color: TEXT_COLOR, style: 'bold' });
-    drawStaticGauge(results.cbacScore);
-    y += 35;
-    drawKeyIndicators();
-    drawStyledText(t('radar_title'), PAGE_WIDTH / 2, y + 5, { size: 11, color: TEXT_COLOR, style: 'bold', align: 'center' });
-    y += 10;
-    drawStaticRadar(PAGE_WIDTH / 2, y + 45, 40);
-    y += 95;
-    checkPageBreak(20);
-    drawStyledText(t('pdf_screening_recommendations'), MARGIN, y, { size: 11, color: TEXT_COLOR, style: 'bold' });
-    y += 5; doc.setDrawColor(BORDER_COLOR).line(MARGIN, y, PAGE_WIDTH - MARGIN, y); y += 8;
-
-    (results.recommendations || []).forEach(rec => {
-        const priorityColor = rec.priority === 'high' ? PRIMARY_COLOR : MUTED_COLOR;
-        checkPageBreak(25);
-        doc.setFillColor(priorityColor).rect(MARGIN, y - 2, 2, 2, 'F');
-        drawStyledText(rec.test, MARGIN + 5, y, { size: 10, color: TEXT_COLOR, style: 'bold' });
-        if (rec.priority === 'high') {
-            const tag = `[${t('priority_high')}]`;
-            const titleWidth = doc.getTextWidth(rec.test);
-            drawStyledText(tag, MARGIN + 8 + titleWidth, y, { size: 8, color: priorityColor, style: 'bold' });
-        }
-        y += 6;
-        drawStyledText(`${rec.frequency}`, MARGIN + 5, y, { size: 9, color: MUTED_COLOR });
-        y += 6;
-        const reasonLines = doc.splitTextToSize(`Reason: ${rec.reason}`, PAGE_WIDTH - (MARGIN * 2) - 5);
-        drawStyledText(reasonLines, MARGIN + 5, y, { size: 9, color: TEXT_COLOR });
-        y += reasonLines.length * 5;
-        y += 4;
-    });
-
-    drawFooter();
-    
-    if (outputType === 'save') {
-        doc.save(`${sanitizeFilename(userData.name)}_Health_Report.pdf`);
-    } else {
-        return doc.output('blob');
+    } catch (error) {
+        console.error("PDF Generation failed", error);
+        alert(t('error_generic'));
+    } finally {
+        setIsSharing(false);
     }
   };
 
-  const handleShare = async () => {
-    const riskLabel = results.cbacScore >= 4 ? t('cbac_high') : t('cbac_low');
-    const highPriorityTests = highPriorityRecs.map(rec => `- ${rec.test}`).join('\n');
+  const dataURLtoBlob = (dataurl: string) => {
+    const arr = dataurl.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    if (!mimeMatch) return null;
+    const mime = mimeMatch[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  }
 
+  const handleShare = async () => {
+    setIsSharing(true);
+    // Add delay to allow UI state to render 'Generating...'
+    await new Promise(r => setTimeout(r, 50));
+    
+    const riskLabel = results.cbacScore >= 4 ? t('cbac_high') : t('cbac_low');
+    
     const summary = `*My Health Screening Summary*\n\n` +
                     `*Name:* ${userData.name}\n` +
                     `*NCD Risk Score:* ${results.cbacScore}/10 (${riskLabel})\n\n` +
-                    `*High-Priority Recommendations:*\n${highPriorityTests || 'None'}\n\n` +
-                    `_Generated by the Preventive Health Advisor app._\n` +
-                    `_${t('welcome_disclaimer')}_`;
+                    `_Generated by the Preventive Health Advisor app._\n`;
 
-    const pdfBlob = generatePDF('blob') as Blob;
-    const pdfFile = new File([pdfBlob], `${userData.name}_Health_Report.pdf`, { type: 'application/pdf' });
-    
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-        try {
+    try {
+        const cardDataUrl = await generateShareableCardDataUrl(userData, results.cbacScore, theme);
+        const imageBlob = cardDataUrl ? dataURLtoBlob(cardDataUrl) : null;
+        
+        if (imageBlob && navigator.share && navigator.canShare && navigator.canShare({ files: [new File([imageBlob], 'summary.png', { type: 'image/png' })] })) {
+            const imageFile = new File([imageBlob], `${userData.name}_Health_Summary.png`, { type: 'image/png' });
             await navigator.share({
-                title: `Health Report for ${userData.name}`,
+                title: `Health Summary for ${userData.name}`,
                 text: summary,
-                files: [pdfFile],
+                files: [imageFile],
             });
-        } catch (error) {
-            console.error('Error sharing:', error);
+        } else {
+            const encodedText = encodeURIComponent(summary);
+            window.open(`https://wa.me/?text=${encodedText}`, '_blank');
         }
-    } else {
-        // Fallback for desktop or unsupported browsers
+    } catch (error) {
+        console.error('Error generating or sharing content:', error);
         const encodedText = encodeURIComponent(summary);
         window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+    } finally {
+        setIsSharing(false);
     }
   };
 
@@ -309,13 +180,47 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, onReset, userD
   };
 
   const details = modalRec ? getRecommendationDetails(modalRec.key) : [];
+  const packYears = ((userData.smokingPacksPerDay || 0) * (userData.smokingYears || 0));
 
   return (
-    <div className="step-content">
+    <div className={`step-content ${themeClass}`}>
       <h2 className="step-header">{t('results_title_for')} {userData.name}</h2>
       <p className="step-subheader">{t('results_subtitle')}</p>
       
-      <NCDRiskGauge score={results.cbacScore} />
+      {results.hasLifestyleRiskAlert && <LifestyleRiskAlert />}
+      
+      <KeyInsightsCard userData={userData} cbacScore={results.cbacScore} />
+
+      <div className="key-indicators-container">
+        <h3 className="results-subheader">{t('key_indicators_title')}</h3>
+        <div className="key-indicators-list">
+            <div className="indicator-item">
+                <strong>{t('pdf_bmi_status')}</strong>
+                <span>
+                    {biometricAnalysis.bmi.value} ({t(bmiStatusKey)})
+                    {biometricAnalysis.bmi.note && <em className="borderline-note">{biometricAnalysis.bmi.note}</em>}
+                </span>
+            </div>
+            <div className="indicator-item">
+                <strong>{t('waist_label')}</strong>
+                <span>
+                    {biometricAnalysis.waist.value}
+                    {biometricAnalysis.waist.note && <em className="borderline-note">{biometricAnalysis.waist.note}</em>}
+                </span>
+            </div>
+             <div className="indicator-item">
+                <strong>{t('pdf_tobacco_smoking')}</strong>
+                <span>
+                    {t(`smoking_status_${userData.smokingStatus}`)}
+                    {packYears > 0 && ` (${packYears} ${t('pack_years')})`}
+                </span>
+            </div>
+             <div className="indicator-item">
+                <strong>{t('alcohol_frequency_label')}</strong>
+                <span>{t(`alcohol_frequency_${userData.alcoholFrequency}`)}</span>
+            </div>
+        </div>
+      </div>
 
       <div className="radar-chart-container">
         <h3 className="results-subheader">{t('radar_title')}</h3>
@@ -353,12 +258,22 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, onReset, userD
           </details>
         )}
       </div>
+
+      <ArogyaClinicCard />
       
       <div className="results-actions">
           <button onClick={onReset} className="btn btn-secondary">{t('start_over')}</button>
-          <button onClick={() => generatePDF('save')} className="btn btn-primary">{t('export_pdf')}</button>
-          <button onClick={handleShare} className="btn btn-whatsapp"><WhatsAppIcon /> Share</button>
+          <button onClick={handleGeneratePDF} disabled={isSharing} className="btn btn-primary">
+            {isSharing ? t('loader_generating') : t('export_pdf')}
+          </button>
+          <button onClick={handleShare} disabled={isSharing} className="btn btn-whatsapp">
+            <WhatsAppIcon /> {isSharing ? t('loader_generating') : t('share_summary')}
+          </button>
       </div>
+
+      <footer className="results-footer">
+          <p>{t('results_footer_text')}</p>
+      </footer>
 
       <Modal isOpen={!!modalRec} onClose={handleCloseModal}>
         {modalRec && (
@@ -369,12 +284,17 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, onReset, userD
                     <p className="modal-frequency">{modalRec.frequency}</p>
                 </div>
                 <div className="modal-body">
-                    {details.map((detail, index) => (
-                        <div key={index} style={{ marginBottom: '1rem' }}>
-                            <h4>{detail.title}</h4>
-                            <p>{detail.content}</p>
-                        </div>
-                    ))}
+                    {details.map((detail, index) => {
+                        if ('title' in detail) {
+                            return (
+                                <div key={index} style={{ marginBottom: '1rem' }}>
+                                    <h4>{detail.title}</h4>
+                                    <p>{detail.content}</p>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })}
                 </div>
                 <div className="modal-footer">
                     <button onClick={handleCloseModal} className="btn btn-primary">{t('close_modal')}</button>

@@ -1,6 +1,6 @@
-
 import type { UserData } from '../types.ts';
 import { DISEASE_CONDITIONS, CLINICAL_THRESHOLDS } from '../constants.ts';
+import { t } from '../locales/index.ts';
 
 export interface RadarData {
     label: string;
@@ -16,8 +16,9 @@ export const calculateRadarData = (data: UserData, t: (key: string) => string): 
     if (bmi >= CLINICAL_THRESHOLDS.BMI_NORMAL_UPPER && bmi < CLINICAL_THRESHOLDS.BMI_OVERWEIGHT_UPPER) biometricsScore += 2;
     if (bmi >= CLINICAL_THRESHOLDS.BMI_OVERWEIGHT_UPPER) biometricsScore += 4;
     
+    const waistInCm = data.waistCircumference * 2.54; // Convert inches to cm
     const isMale = data.gender === 'male';
-    if ((isMale && data.waistCircumference > CLINICAL_THRESHOLDS.WAIST_MALE_HIGH) || (!isMale && data.waistCircumference > CLINICAL_THRESHOLDS.WAIST_FEMALE_HIGH)) {
+    if ((isMale && waistInCm > CLINICAL_THRESHOLDS.WAIST_MALE_HIGH) || (!isMale && waistInCm > CLINICAL_THRESHOLDS.WAIST_FEMALE_HIGH)) {
         biometricsScore += 2; // Add 2 points, not just set to 2
     }
     
@@ -74,7 +75,7 @@ export const calculateRadarData = (data: UserData, t: (key: string) => string): 
         const hasHighRiskCancer = data.familyHistory.some(h => highRiskCancers.includes(h.condition));
         
         // The radar chart must reflect the same high-risk factors as the rules engine.
-        if (hasHighRiskCancer || data.ashkenaziAncestry) {
+        if (hasHighRiskCancer) {
             familyHistoryScore = MAX_SCORE; // Assign max score for high-impact cancer history or genetic risk
         } else {
             const ncdConditions = [

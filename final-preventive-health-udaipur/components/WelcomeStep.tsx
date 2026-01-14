@@ -1,44 +1,41 @@
-
 import React from 'react';
 import { t } from '../locales/index.ts';
 
 const WelcomeIllustration: React.FC = () => (
     <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="welcome-illustration-title">
-        <title id="welcome-illustration-title">Abstract illustration of health and science elements like a heart, EKG line, and cells.</title>
+        <title id="welcome-illustration-title">Abstract illustration of flowing lines and shapes representing health and technology.</title>
         <defs>
-            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style={{stopColor: 'var(--primary)', stopOpacity: 1}} />
-                <stop offset="100%" style={{stopColor: 'var(--accent)', stopOpacity: 1}} />
+            <linearGradient id="grad-indigo" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="var(--primary-light)" />
+                <stop offset="100%" stopColor="var(--primary)" />
             </linearGradient>
-            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-                <feMerge>
-                    <feMergeNode in="coloredBlur" />
-                    <feMergeNode in="SourceGraphic" />
-                </feMerge>
+            <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.5 0" result="glow" />
+                <feComposite in="glow" in2="SourceGraphic" operator="over" />
             </filter>
         </defs>
+
+        <path d="M -50 150 C 100 50, 250 250, 450 150" stroke="url(#grad-indigo)" strokeWidth="60" fill="none" opacity="0.1" strokeLinecap="round" />
         
-        {/* Background shapes */}
-        <circle cx="100" cy="100" r="80" fill="var(--primary-soft)" />
-        <path d="M 250,50 Q 350,50 350,150 T 250,250 Z" fill="rgba(20, 184, 166, 0.08)" />
+        <circle cx="90" cy="90" r="70" fill="var(--primary-soft)" opacity="0.7" />
 
-        {/* EKG Line */}
-        <path d="M 50 150 L 120 150 L 140 120 L 160 180 L 180 140 L 200 150 L 350 150" stroke="url(#grad1)" strokeWidth="4" fill="none" strokeLinecap="round" filter="url(#glow)" />
+        <path d="M 50 250 C 150 350, 300 100, 400 200" stroke="var(--primary-soft)" strokeWidth="3" fill="none" />
 
-        {/* Heart shape */}
-        <path 
-            d="M293.3,73.8c-20.8-20.8-54.6-20.8-75.4,0L200,91.7l-17.9-17.9c-20.8-20.8-54.6-20.8-75.4,0   c-20.8,20.8-20.8,54.6,0,75.4l93.3,93.3l93.3-93.3C314.1,128.4,314.1,94.6,293.3,73.8z" 
-            fill="none" 
-            stroke="var(--primary)" 
-            strokeWidth="3"
-            transform="translate(-90, 80) scale(0.4)"
-        />
+        <path d="M 20,150 Q 200,50 380,150" stroke="url(#grad-indigo)" strokeWidth="8" fill="none" strokeLinecap="round" filter="url(#softGlow)" style={{ animation: 'flow 6s ease-in-out infinite' }} />
 
-        {/* Abstract dots */}
-        <circle cx="320" cy="80" r="5" fill="var(--accent)" />
-        <circle cx="340" cy="220" r="8" fill="var(--primary-soft)" stroke="var(--primary)" strokeWidth="2" />
-        <circle cx="80" cy="230" r="10" fill="var(--accent)" opacity="0.5" />
+        <circle cx="320" cy="80" r="12" fill="url(#grad-indigo)" />
+        <circle cx="60" cy="220" r="8" fill="var(--primary-light)" opacity="0.8" />
+        
+        <style>
+            {`
+                @keyframes flow {
+                    0% { stroke-dasharray: 0 1000; }
+                    50% { stroke-dasharray: 1000 1000; }
+                    100% { stroke-dasharray: 1000 0; }
+                }
+            `}
+        </style>
     </svg>
 );
 
@@ -48,11 +45,24 @@ const WelcomeStep: React.FC<{onNext: () => void}> = ({ onNext }) => {
   return (
     <div className="welcome-step">
       <div className="welcome-content">
-        <h1>{t('welcome_title')}</h1>
-        <p className="intro-text">
+        <h1 className="stagger-1">{t('welcome_title')}</h1>
+        
+        <p className="stagger-2" style={{ 
+            fontSize: '1rem', 
+            fontWeight: 700, 
+            color: 'var(--primary)', 
+            marginBottom: '1.5rem',
+            lineHeight: 1.4,
+            maxWidth: '550px',
+            marginInline: 'auto'
+        }}>
+            {t('welcome_institution')}
+        </p>
+
+        <p className="intro-text stagger-3">
           {t('welcome_subtitle')}
         </p>
-        <div>
+        <div className="stagger-4">
           <button
             onClick={onNext}
             className="btn btn-primary"
@@ -60,11 +70,18 @@ const WelcomeStep: React.FC<{onNext: () => void}> = ({ onNext }) => {
             {t('get_started')}
           </button>
         </div>
-        <div className="welcome-disclaimer">
+        <div className="welcome-disclaimer stagger-4" style={{ 
+            marginTop: 'auto', 
+            paddingTop: '2rem',
+            fontSize: '0.8rem',
+            color: 'var(--text-muted)',
+            opacity: 0.9,
+            fontWeight: 500
+        }}>
           {t('welcome_disclaimer')}
         </div>
       </div>
-      <div className="welcome-illustration">
+      <div className="welcome-illustration animate-fade-in">
         <WelcomeIllustration />
       </div>
     </div>

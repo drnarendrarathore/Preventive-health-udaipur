@@ -3,6 +3,7 @@ import type { UserData, Action } from '../types.ts';
 import { FAMILY_HISTORY_OPTIONS, PERSONAL_CONDITIONS_OPTIONS, CANCER_HISTORY_OPTIONS, DISEASE_CONDITIONS, CLINICAL_THRESHOLDS } from '../constants.ts';
 import { t } from '../locales/index.ts';
 import ToggleButton from './form/ToggleButton.tsx';
+import RadioGroup from './form/RadioGroup.tsx';
 
 interface RiskFactorsStepProps {
   data: UserData;
@@ -19,7 +20,6 @@ const RiskFactorsStep: React.FC<RiskFactorsStepProps> = ({ data, dispatch, onSub
   const [animatedRisk, setAnimatedRisk] = useState<{ id: string | null; level: 'high' | 'moderate' | null }>({ id: null, level: null });
   const animationTimeoutRef = useRef<number | null>(null);
 
-  // Defines which conditions trigger feedback because they affect the rules engine.
   const HIGH_RISK_CANCERS = [
       DISEASE_CONDITIONS.BREAST_CANCER, 
       DISEASE_CONDITIONS.OVARIAN_CANCER, 
@@ -34,8 +34,6 @@ const RiskFactorsStep: React.FC<RiskFactorsStepProps> = ({ data, dispatch, onSub
   ];
 
   const isFormValid = useMemo(() => {
-    // Check if any entered age at diagnosis is invalid.
-    // An empty field is considered valid.
     return data.familyHistory.every(item => {
       const age = item.relativeAgeAtDiagnosis;
       return age === undefined || (age >= 1 && age <= CLINICAL_THRESHOLDS.MAXIMUM_PATIENT_AGE);
@@ -102,8 +100,20 @@ const RiskFactorsStep: React.FC<RiskFactorsStepProps> = ({ data, dispatch, onSub
 
   const handleUnsureToggle = (isUnsure: boolean) => {
     dispatch({type: 'UPDATE_FIELD', field: 'familyHistoryUnsure', value: isUnsure});
-    // The <fieldset disabled> attribute prevents interaction,
-    // preserving the user's selections if they accidentally click this and then un-click it.
+  };
+
+  const radioOptions = {
+    hepatitis: [
+        { value: 'none', label: t('hep_none') },
+        { value: 'hep_b', label: t('hep_b') },
+        { value: 'hep_c', label: t('hep_c') },
+        { value: 'both', label: t('hep_both') },
+    ] as {value: 'none'|'hep_b'|'hep_c'|'both', label: string}[],
+    hpv: [
+        { value: 'none', label: t('hpv_none') },
+        { value: 'partial', label: t('hpv_partial') },
+        { value: 'complete', label: t('hpv_complete') },
+    ] as {value: 'none'|'partial'|'complete', label: string}[],
   };
 
   return (
@@ -115,50 +125,23 @@ const RiskFactorsStep: React.FC<RiskFactorsStepProps> = ({ data, dispatch, onSub
             
             <div className="risk-factor-section inset">
                 <h4 style={{ marginBottom: '1rem', color: 'var(--text-main)', fontWeight: '700' }}>{t('infectious_label')}</h4>
-                
-                <div className="form-group">
-                    <label className="form-label">{t('hepatitis_label')}</label>
-                    <div className="radio-group" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-                        {(['none', 'hep_b', 'hep_c', 'hep_both'] as const).map((type) => (
-                            <button key={type} type="button" onClick={() => {
-                                triggerHapticFeedback();
-                                dispatch({type: 'UPDATE_FIELD', field: 'hepatitisHistory', value: type});
-                                if (type !== 'none') triggerRiskAnimation(`hep-${type}`, 'high');
-                            }} className={`radio-label ${data.hepatitisHistory === type ? 'selected' : ''} ${animatedRisk.id === `hep-${type}` ? `risk-glow-${animatedRisk.level}` : ''}`}>
-                                {t(`hep_${type}`)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">{t('hpv_vaccine_label')}</label>
-                    <div className="radio-group" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-                        {(['none', 'partial', 'complete'] as const).map((status) => (
-                            <button key={status} type="button" onClick={() => {
-                                triggerHapticFeedback();
-                                dispatch({type: 'UPDATE_FIELD', field: 'hpvVaccineStatus', value: status});
-                            }} className={`radio-label ${data.hpvVaccineStatus === status ? 'selected' : ''}`}>
-                                {t(`hpv_${status}`)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            <div className="recommendation-card high-risk">
-                <div style={{ flex: 1 }}>
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>{t('ashkenazi_ancestry_label')}</h3>
-                    <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>{t('ashkenazi_ancestry_desc')}</p>
-                </div>
-                <ToggleButton 
-                    value={!!data.ashkenaziAncestry} 
-                    onChange={(val) => dispatch({type: 'UPDATE_FIELD', field: 'ashkenaziAncestry', value: val})}
-                    onToggle={() => {
-                        triggerHapticFeedback();
-                        if (!data.ashkenaziAncestry) triggerRiskAnimation('ashkenazi-ancestry', 'high');
+                <RadioGroup
+                    label={t('hepatitis_label')}
+                    options={radioOptions.hepatitis}
+                    selectedValue={data.hepatitisHistory}
+                    onChange={(val) => {
+                        dispatch({type: 'UPDATE_FIELD', field: 'hepatitisHistory', value: val});
+                        if (val !== 'none') triggerRiskAnimation(`hep-${val}`, 'high');
                     }}
-                    className={animatedRisk.id === 'ashkenazi-ancestry' ? `risk-glow-${animatedRisk.level}` : ''} 
+                    getAnimationClass={(val) => animatedRisk.id === `hep-${val}` && val !== 'none' ? `risk-glow-high` : ''}
+                    gridColumns={2}
+                />
+                <RadioGroup
+                    label={t('hpv_vaccine_label')}
+                    options={radioOptions.hpv}
+                    selectedValue={data.hpvVaccineStatus}
+                    onChange={(val) => dispatch({type: 'UPDATE_FIELD', field: 'hpvVaccineStatus', value: val})}
+                    gridColumns={3}
                 />
             </div>
 
@@ -196,28 +179,32 @@ const RiskFactorsStep: React.FC<RiskFactorsStepProps> = ({ data, dispatch, onSub
                         return (
                         <details key={category} className="collapsible-section" open>
                             <summary>{t(categoryKey)}</summary>
-                            <div className="checkbox-group">
-                                {options.map(option => {
-                                    const isCancer = CANCER_HISTORY_OPTIONS.includes(option);
-                                    const currentSelection = data.familyHistory.find(item => item.condition === option);
-                                    const optionKey = generateTranslationKey(option);
-                                    const age = currentSelection?.relativeAgeAtDiagnosis;
-                                    const isAgeInvalid = age !== undefined && (age < 1 || age > CLINICAL_THRESHOLDS.MAXIMUM_PATIENT_AGE);
+                            <div className="accordion-content-wrapper">
+                                <div className="accordion-content">
+                                    <div className="checkbox-group" style={{ padding: '0.5rem 0' }}>
+                                        {options.map(option => {
+                                            const isCancer = CANCER_HISTORY_OPTIONS.includes(option);
+                                            const currentSelection = data.familyHistory.find(item => item.condition === option);
+                                            const optionKey = generateTranslationKey(option);
+                                            const age = currentSelection?.relativeAgeAtDiagnosis;
+                                            const isAgeInvalid = age !== undefined && (age < 1 || age > CLINICAL_THRESHOLDS.MAXIMUM_PATIENT_AGE);
 
-                                    return (
-                                    <div key={option} className="checkbox-item-wrapper">
-                                        <label className={`checkbox-label ${currentSelection ? 'selected' : ''} ${animatedRisk.id === `family-${optionKey}` ? `risk-glow-${animatedRisk.level}` : ''}`} htmlFor={`family-hist-${optionKey}`}>
-                                            <input type="checkbox" id={`family-hist-${optionKey}`} checked={!!currentSelection} onChange={() => handleFamilyHistoryChange(option)} className="sr-only" />
-                                            <span className="checkbox-text">{t(optionKey)}</span>
-                                        </label>
-                                        {isCancer && currentSelection && (
-                                            <div className="contextual-input animate-fade-in" style={{ marginTop: '0.5rem' }}>
-                                                <input type="number" placeholder={t('relative_age_placeholder')} value={age || ''} onChange={(e) => handleFamilyHistoryAgeChange(option, e.target.value ? parseInt(e.target.value) : undefined)} className={`form-input ${isAgeInvalid ? 'error' : ''}`} style={{ padding: '0.5rem' }} />
+                                            return (
+                                            <div key={option} className="checkbox-item-wrapper">
+                                                <label className={`checkbox-label ${currentSelection ? 'selected' : ''} ${animatedRisk.id === `family-${optionKey}` ? `risk-glow-${animatedRisk.level}` : ''}`} htmlFor={`family-hist-${optionKey}`}>
+                                                    <input type="checkbox" id={`family-hist-${optionKey}`} checked={!!currentSelection} onChange={() => handleFamilyHistoryChange(option)} className="sr-only" />
+                                                    <span className="checkbox-text">{t(optionKey)}</span>
+                                                </label>
+                                                {isCancer && currentSelection && (
+                                                    <div className="contextual-input animate-fade-in" style={{ marginTop: '0.5rem' }}>
+                                                        <input type="number" placeholder={t('relative_age_placeholder')} value={age || ''} onChange={(e) => handleFamilyHistoryAgeChange(option, e.target.value ? parseInt(e.target.value) : undefined)} className={`form-input ${isAgeInvalid ? 'error' : ''}`} style={{ padding: '0.5rem' }} />
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
+                                            );
+                                        })}
                                     </div>
-                                    );
-                                })}
+                                </div>
                             </div>
                         </details>
                     )})}
