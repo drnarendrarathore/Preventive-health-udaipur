@@ -1,0 +1,67 @@
+
+export interface FamilyHistoryCondition {
+  condition: string;
+  relativeAgeAtDiagnosis?: number;
+}
+
+export interface UserData {
+  name: string;
+  age: number;
+  gender: 'male' | 'female' | 'other' | '';
+  womenHealthStatus?: 'default' | 'pregnant' | 'menopause';
+
+  // NP-NCD Core
+  waistCircumference: number; // in cm
+  cookingFuelType: 'lpg' | 'biomass' | 'electric'; // Biomass = High COPD risk
+  hasOralSigns: boolean; // White/red patches
+  
+  smokingStatus: 'never' | 'former' | 'current';
+  smokingPacksPerDay?: number;
+  smokingYears?: number;
+  quitSmokingYear?: number;
+  
+  alcoholFrequency: 'none' | 'moderate' | 'high';
+  
+  saltIntake: 'low' | 'moderate' | 'high';
+  physicalActivity: 'sedentary' | 'moderate' | 'active';
+  hpvVaccineStatus: 'none' | 'partial' | 'complete';
+  hepatitisHistory: 'none' | 'hep_b' | 'hep_c' | 'both';
+  marbleMiningExposure: boolean;
+  ashkenaziAncestry: boolean;
+
+  smokelessTobaccoProducts: string[];
+  usesSmokelessTobacco: boolean;
+  
+  familyHistory: FamilyHistoryCondition[];
+  familyHistoryUnsure?: boolean;
+  personalConditions: string[];
+  
+  height?: number; 
+  weight?: number; 
+}
+
+export interface UserDataErrors {
+  name: string | null;
+  age: string | null;
+}
+
+export interface Recommendation {
+  key: string;
+  categoryKey: string;
+  category: string;
+  test: string;
+  frequency: string;
+  reason: string;
+  priority: 'high' | 'normal';
+}
+
+export interface AnalysisResponse {
+  recommendations: Recommendation[];
+  disclaimer: string;
+  cbacScore: number;
+}
+
+export type Action =
+  | { type: 'UPDATE_FIELD'; field: keyof UserData; value: any }
+  | { type: 'REPLACE_STATE'; payload: UserData }
+  | { type: 'RESET_STATE' };
