@@ -238,7 +238,7 @@ export const generateHealthReportPDF = async (
     // --- MANDATORY PROFESSIONAL DISCLAIMER BOX ---
     const disclaimerBody = t('pdf_clinical_disclaimer_body');
     const disclaimerLines = doc.splitTextToSize(disclaimerBody, CONTENT_WIDTH - 20);
-    const boxH = 20 + (disclaimerLines.length * 5);
+    const boxH = 25 + (disclaimerLines.length * 5);
 
     // Ensure space for the box or push to next page
     if (cursorY + boxH > PAGE_HEIGHT - 45) {
